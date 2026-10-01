@@ -43,7 +43,8 @@ Rules for every app you write (Meta Ray-Ban Display web app platform):
 const SEARCH_PROMPT = `
 Use the web_search tool for anything current, local or checkable: weather, news, scores, prices, opening hours, events, directions and places nearby. Don't guess at facts that change.
 Messages may end with a [Context from the glasses: ...] note giving the wearer's local time and, when shared, their location. Use it for "near me", "here", "now" and "today" questions; don't mention it otherwise.
-Never put URLs, source lists or citation markers in replies; just give the answer, naming a source briefly only when it matters.`;
+Never put URLs, source lists or citation markers in replies; just give the answer, naming a source briefly only when it matters.
+Don't announce or narrate your steps ("Checking now", "Let me pull that up"); the glasses already show progress while you search or work. Write only the final reply.`;
 
 const SYSTEM_PROMPT = (process.env.SYSTEM_PROMPT || BASE_PROMPT) + "\n" + SEARCH_PROMPT + "\n" + APP_BUILDER_PROMPT;
 
@@ -116,8 +117,8 @@ const TOOLS = [
 ];
 
 // Meta's docs don't pin down the type string its Messages endpoint wants for hosted
-// web search, so try Anthropic's, then the bare name, then go on without search.
-// Remembered across requests once a type is accepted.
+// web search. Anthropic's works (Oct 2026); if that changes, try the bare name, then
+// go on without search. Remembered across requests once a type is accepted.
 const SEARCH_TYPES = ["web_search_20250305", "web_search"];
 const search = { index: 0, confirmed: false };
 
@@ -309,7 +310,7 @@ function sanitizeMessages(raw) {
 //   {type:"text",text}            answer text
 //   {type:"status",text}          progress, e.g. "Writing Timer…"
 //   {type:"round"}                a new model request starts (marks where a retry rewinds to)
-//   {type:"retry"}                discard text since the last round (request re-issued)
+//   {type:"retry"}                discard text since the last round (request re-issued, or it was narration before a tool call)
 //   {type:"app",app}              an app was saved; {type:"app_deleted",id}
 //   {type:"ping"}                 keep-alive, ignored by the client
 //   {type:"done"} | {type:"error",error}
@@ -369,7 +370,19 @@ async function handleChat(req, res) {
       try {
         let toolBytes = 0;
         let lastReport = 0;
+        let shownText = false; // text from this request is on the display
         for await (const event of current) {
+          if (event.type === "content_block_start") {
+            const type = event.content_block.type;
+            // Muse tends to narrate before it searches or uses a tool ("Checking now…"). The
+            // glasses already show progress, so clear that text and keep only the answer.
+            if ((type === "server_tool_use" || type === "tool_use") && shownText) {
+              emit({ type: "retry" });
+              shownText = false;
+            }
+            // Several text blocks in one reply: keep them apart.
+            if (type === "text" && shownText) emit({ type: "text", text: " " });
+          }
           if (event.type === "content_block_start" && event.content_block.type === "server_tool_use") {
             emit({ type: "status", text: "Searching the web…" });
           } else if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
@@ -377,8 +390,10 @@ async function handleChat(req, res) {
             toolBytes = 0;
             emit({ type: "status", text: name === "save_app" ? "Writing code…" : name === "read_app" ? "Reading app…" : "Working…" });
           } else if (event.type === "content_block_delta") {
-            if (event.delta.type === "text_delta") emit({ type: "text", text: event.delta.text });
-            else if (event.delta.type === "input_json_delta") {
+            if (event.delta.type === "text_delta") {
+              emit({ type: "text", text: event.delta.text });
+              shownText = true;
+            } else if (event.delta.type === "input_json_delta") {
               toolBytes += event.delta.partial_json.length;
               if (toolBytes - lastReport > 1024) {
                 lastReport = toolBytes;

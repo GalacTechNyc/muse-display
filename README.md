@@ -88,7 +88,7 @@ You need glasses firmware v125+ and Meta AI app v272+. The key is saved on the g
 
 **Cost:** Muse Spark costs about $1.25 per million input tokens and $4.25 per million output tokens, plus $2.50 per 1,000 web searches.
 
-**Web search:** Meta's docs don't say exactly which tool name its Anthropic-compatible endpoint expects for web search. The server tries `web_search_20250305`, then `web_search`, and keeps working without search if neither is accepted. `/api/health` shows which one is in use (`"webSearch"`).
+**Web search:** Meta's docs don't say which tool name its Anthropic-compatible endpoint expects for web search. `web_search_20250305` works as of October 2026. If Meta ever rejects it, the server tries `web_search`, then keeps working without search. `/api/health` shows which one is in use (`"webSearch"`).
 
 ## Run locally / test without glasses
 

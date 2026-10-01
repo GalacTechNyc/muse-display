@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="description" content="Ask Muse from your Meta Ray-Ban Display glasses">
+  <meta name="theme-color" content="#000000">
+  <title>Muse</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <span class="brand"><span class="mark">✦</span> Muse</span>
+    <span id="status" class="status">Ready</span>
+  </header>
+
+  <main id="view" aria-live="polite">
+    <div id="welcome" class="welcome">
+      <p class="big">Ask me anything.</p>
+      <p class="hint">Pinch the box below to speak or write.</p>
+      <p class="hint">Or ask me to build an app for your glasses.</p>
+      <p class="hint">Swipe ↑ ↓ to read · ← → to move</p>
+    </div>
+    <div id="exchange" class="exchange" hidden>
+      <p id="question" class="question"></p>
+      <div id="answer" class="answer"></div>
+    </div>
+    <div id="appsView" class="apps-view" hidden>
+      <div id="appList" class="app-list"></div>
+      <div id="appsEmpty" class="welcome" hidden>
+        <p class="big">No apps yet.</p>
+        <p class="hint">Ask Muse something like<br>“Make me a pomodoro timer”.</p>
+        <p class="hint">Swipe back to return.</p>
+      </div>
+    </div>
+  </main>
+  <button id="openApp" class="focusable open-app" hidden></button>
+  <div id="more" class="more" hidden>▼ swipe down for more</div>
+
+  <footer>
+    <textarea id="prompt" class="focusable" rows="1" placeholder="Ask Muse…" aria-label="Ask Muse"></textarea>
+    <button id="speak" class="focusable icon" aria-label="Read answers aloud" aria-pressed="false"><span class="ico">🔈</span><span class="lbl">Voice</span></button>
+    <button id="placeBtn" class="focusable icon" aria-label="Share my location with Muse" aria-pressed="false"><span class="ico">📍</span><span class="lbl">Place</span></button>
+    <button id="appsBtn" class="focusable icon" aria-label="Your apps"><span class="ico">▦</span><span class="lbl">Apps</span></button>
+    <button id="reset" class="focusable icon" aria-label="New chat"><span class="ico">＋</span><span class="lbl">New</span></button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -480,6 +480,122 @@
 
   document.addEventListener("keydown", (e) => (view === "apps" ? handleAppsKey(e) : handleChatKey(e)));
 
+  // --- Meta AI (WebMCP) ------------------------------------------------------
+  // On glasses with WebMCP turned on, Meta AI can run this page by voice ("Hey Meta,
+  // ask Muse…"). Every tool is also the ask box or a button, so nothing depends on it.
+  // Meta AI waits at most 10 seconds for a tool, so ask_muse hands the request over
+  // and Muse's answer streams onto the display as usual.
+
+  async function fetchApps(signal) {
+    const res = await fetch("api/apps", { headers: authHeaders, signal });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Error ${res.status}`);
+    return body.apps;
+  }
+
+  const nameWords = (s) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w && !["the", "my", "app"].includes(w));
+
+  // Apps whose titles best match a spoken name ("pomodoro" → "Pomodoro Timer").
+  // More than one result means the name was unclear.
+  function findApps(list, spoken) {
+    const want = nameWords(spoken);
+    if (!want.length) return [];
+    const scored = list
+      .map((app) => {
+        const have = nameWords(app.title);
+        const shared = want.filter((w) => have.some((h) => h.startsWith(w) || w.startsWith(h))).length;
+        return { app, score: shared / Math.max(want.length, have.length) };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score);
+    return scored.filter((s) => s.score === scored[0]?.score).map((s) => s.app);
+  }
+
+  const noApps = "Tell the user they have no apps yet and can ask Muse to make one.";
+
+  const agentTools = [
+    {
+      name: "ask_muse",
+      description:
+        'Send the wearer\'s request to Muse, the AI in this app: questions, anything to look up, and making or changing a glasses app ("make me a timer", "make the numbers bigger"). Muse\'s answer appears on the display.',
+      inputSchema: {
+        type: "object",
+        properties: { request: { type: "string", description: "The wearer's request, in their own words." } },
+        required: ["request"],
+      },
+      async execute(input) {
+        const request = typeof input?.request === "string" ? input.request.trim() : "";
+        if (!request) return { sent: false, error: "empty_request", next_action: "Ask the user what they want Muse to do." };
+        if (busy) {
+          return {
+            sent: false,
+            error: "busy",
+            message: "Muse is still answering the last request.",
+            next_action: "Tell the user Muse is still answering and to ask again in a moment.",
+          };
+        }
+        if (view === "apps") showChat();
+        promptEl.value = request.slice(0, 4000);
+        send();
+        return {
+          sent: true,
+          next_action: "Stop. In a few words, tell the user Muse is answering on the display. Do not answer the request yourself.",
+        };
+      },
+    },
+    {
+      name: "open_app",
+      description:
+        "Open one of the glasses apps Muse has built for the wearer, by name. Without a name, it shows the app list and returns the app names.",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string", description: "The app's name as the wearer said it." } },
+      },
+      async execute(input, { signal } = {}) {
+        const list = await fetchApps(signal);
+        const titles = list.map((a) => a.title);
+        const spoken = typeof input?.name === "string" ? input.name.trim() : "";
+        if (!spoken) {
+          showApps();
+          return { apps: titles, next_action: titles.length ? "Stop and name the apps in one short sentence." : noApps };
+        }
+        const matches = findApps(list, spoken);
+        if (matches.length === 1) {
+          setTimeout(() => openApp(matches[0].id), 300); // reply first; leaving the page removes these tools
+          return { opened: matches[0].title, next_action: "Stop. Say the app is open." };
+        }
+        if (matches.length > 1) {
+          return { opened: null, error: "unclear", matches: matches.map((a) => a.title), next_action: "Ask the user which of these apps they mean." };
+        }
+        return {
+          opened: null,
+          error: "not_found",
+          apps: titles,
+          next_action: titles.length ? "Tell the user there's no app by that name and name the apps they have." : noApps,
+        };
+      },
+    },
+    {
+      name: "new_chat",
+      description: "Clear the conversation with Muse and start a new chat.",
+      async execute() {
+        if (view === "apps") showChat();
+        resetChat();
+        return { cleared: true, next_action: "Stop. Say a new chat started." };
+      },
+    },
+  ];
+
+  function registerAgentTools() {
+    if (!document.modelContext) return;
+    for (const tool of agentTools) {
+      try {
+        Promise.resolve(document.modelContext.registerTool(tool)).catch(() => {});
+      } catch { /* the host rejected this definition; the app still works by hand */ }
+    }
+  }
+
   // --- Start -----------------------------------------------------------------
   setSpeak(speakAloud);
   placeBtn.setAttribute("aria-pressed", String(shareLocation));
@@ -491,6 +607,7 @@
     renderLatest();
     promptEl.focus();
   }
+  registerAgentTools();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});

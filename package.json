@@ -1,0 +1,18 @@
+{
+  "name": "muse-display",
+  "version": "1.0.0",
+  "description": "A full-screen web app for chatting with Muse (Meta's Muse Spark) on Meta Ray-Ban Display glasses",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "check": "node --check server.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@vercel/blob": "^2.8.0"
+  }
+}
